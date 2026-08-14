@@ -1,0 +1,9 @@
+{
+  "model_name": "LinearSVC",
+  "macro_f1": 0.6024585249228916,
+  "classes": [
+    "LOW",
+    "MEDIUM",
+    "HIGH"
+  ]
+}

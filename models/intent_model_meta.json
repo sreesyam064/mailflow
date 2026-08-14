@@ -1,0 +1,10 @@
+{
+  "model_name": "LinearSVC",
+  "macro_f1": 0.6462385240501455,
+  "classes": [
+    "Billing",
+    "General Inquiry",
+    "Sales",
+    "Technical Support"
+  ]
+}
