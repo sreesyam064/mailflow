@@ -1,0 +1,100 @@
+name: CI/CD — Test, Build Verify, Deploy to Hugging Face
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Run test suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run pytest
+        run: python -m pytest tests/ -v
+
+  docker-build-verify:
+    name: Verify Docker image builds
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build-Verification gate only — this image is NOT pushed anywhere.
+      # It existes purely to catch Dockerfile/dependency breakage before the same
+      # Dockerfile is built for real by Hugging Face Spaces in deploy job below.cancel-timeout-minutes:
+      - name: Build image (Verification only, no push)
+        run: docker build -t mailflow-ai:ci-verify .
+
+      - name: Smoke-test the built image
+        run: |
+          docker run -d --name mailflow-ci -p 7860:7860 mailflow-ai:ci-verify
+          echo "Waiting for Flask (internal, via docker exec) to become healthy..."
+          for i in $(seq 1 20); do
+            if docker exec mailflow-ci python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health')" 2>/dev/null; then
+              echo "Flask Healthy."
+              break
+            fi
+            sleep 3
+          done
+          docker exec mailflow-ci python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health')"
+
+          echo "Waiting for Streamlit (public port 7860) to respond..."
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:7860 > /dev/null 2>&1; then
+              echo "Streamlit Healthy."
+              break
+            fi
+            sleep 3
+          done
+          curl -sf http://localhost:7860 > /dev/null
+
+          docker logs mailflow-ci
+          docker stop mailflow-ci
+
+  deploy-to-huggingface:
+    name: Deploy to Hugging Face Spaces
+    runs-on: ubuntu-latest
+    needs: [test, docker-build-verify]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # HF Spaces requires its config (sdk, app_port, etc.) as YAML frontmatter in README.md —
+      # but that frontmatter renders as ugly literal text on GitHub, which doesn't parse it.
+      # So we swap in HF-specific README ONLY for this pudh, as local commit that never pushed
+      # back to origin/main. GitHub's README.md is untouched.
+      - name: Swap in HF Spaces README (local commit only, not pushed to origin)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          cp README_HF.md README.md
+          git add README.md
+          git commit -m "chore: use HF Spaces README (CI-only, not merged to origin)"
+
+      # Pushes this repo's main branch to HuggingFace Space's own git remote.
+      # Hugging Face then builds the SAME Dockerfile itself and auto-deploys —
+      # HF Spaces (Docker SDK) always builds from its won repo, it does not pull
+      # images from an external registry.
+      - name: Push to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_USERNAME: ${{ secrets.HF_USERNAME }}
+          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
+        run:
+          git remote add hf https://${HF_USERNAME}:${HF_TOKEN}@huggingface.co/spaces/${HF_USERNAME}/${HF_SPACE_NAME}
+          git push hf HEAD:main --force
