@@ -1,0 +1,24 @@
+MailFlow AI — Model A (Intent Classification) Evaluation
+============================================================
+
+Model comparison (macro-F1):
+  LinearSVC: 0.6462
+  LogisticRegression: 0.5842
+  MultinomialNB: 0.4720
+Classification report (held-out 20% test set):
+                   precision    recall  f1-score   support
+
+          Billing       0.80      0.75      0.77       260
+  General Inquiry       0.67      0.67      0.67       965
+            Sales       0.58      0.33      0.42        66
+Technical Support       0.71      0.73      0.72      1048
+
+         accuracy                           0.70      2339
+        macro avg       0.69      0.62      0.65      2339
+     weighted avg       0.70      0.70      0.70      2339
+
+Confusion matrix (rows=true, cols=pred):
+Labels order: ['Billing', 'General Inquiry', 'Sales', 'Technical Support'][[195  38   1  26]
+ [ 31 646   7 281]
+ [  6  28  22  10]
+ [ 12 259   8 769]]

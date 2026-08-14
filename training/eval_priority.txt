@@ -1,0 +1,25 @@
+MailFlow AI — Model B (Priority Classification) Evaluation
+============================================================
+
+NOTE: trained on REAL priority labels from the source dataset,
+not rule-derived. See README for dataset disclosure.
+
+Model comparison (macro-F1):
+  LinearSVC: 0.6025
+  LogisticRegression: 0.5481
+  MultinomialNB: 0.3874
+Classification report (held-out 20% test set):
+              precision    recall  f1-score   support
+
+        HIGH       0.63      0.68      0.65       909
+         LOW       0.57      0.48      0.52       461
+      MEDIUM       0.63      0.64      0.63       969
+
+    accuracy                           0.62      2339
+   macro avg       0.61      0.60      0.60      2339
+weighted avg       0.62      0.62      0.62      2339
+
+Confusion matrix (rows=true, cols=pred), labels order: ['LOW', 'MEDIUM', 'HIGH']:
+[[221 142  98]
+ [ 91 617 261]
+ [ 78 216 615]]
