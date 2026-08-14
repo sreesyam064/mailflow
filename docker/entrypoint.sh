@@ -16,7 +16,7 @@ gunicorn \
 # silently against a backend that isn't there yet.
 echo "Waiting for Flask (Gunicorn) to become ready on 127.0.0.1:5000..."
 for i in $(seq 1 30); do
-    if python -c "import urllib; urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=1)" 2>/dev/null; then
+    if python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=1)" 2>/dev/null; then
         echo "Flask is ready."
         break
     fi
