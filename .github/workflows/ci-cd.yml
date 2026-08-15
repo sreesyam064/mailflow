@@ -55,7 +55,7 @@ jobs:
         run: |
           docker build \
             -t "${{ steps.vars.outputs.sha_tag }}" \
-            -t "${{ steps.vars.outputs.latest_tag }}"
+            -t "${{ steps.vars.outputs.latest_tag }}" \
             .
 
       - name: Smoke-test the built image
