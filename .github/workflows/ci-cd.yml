@@ -44,8 +44,9 @@ jobs:
         id: vars
         run: |
           IMAGE="${IMAGE_NAME,,}"
-          echo "image=$IMAGE:${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-          echo "sha_tag=$IMAGE:latest" >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=$IMAGE:${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "latest_tag=$IMAGE:latest" >> "$GITHUB_OUTPUT"
 
       # Build ONCE, tagged with both :latest and the short commit SHA. This exact image is
       # what gets smoke-tested below and, only if that passes, pushed to GHCR — so image
