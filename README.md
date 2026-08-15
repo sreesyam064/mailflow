@@ -2,7 +2,7 @@
 
 A lightweight, end-to-end AI/ML system that analyzes incoming support emails and automatically determines intent, priority, sentiment, department routing, key entities, a recommended action, and a draft response — built to assist human operators, not replace them. **The system never sends email automatically.**
 
-**🔗 Live application:** [https://mailflow-ai.onrender.com](https://mailflow-ai.onrender.com)
+**🔗 Live application:** [https://mailflow-35d9.onrender.com](https://mailflow-35d9.onrender.com)
 
 ---
 
@@ -130,6 +130,7 @@ mailflow/
 ├── .dockerignore
 ├── .env.example
 ├── .gitignore
+├── README.md
 ├── requirements.txt / requirements-dev.txt
 ├── app.py                                     # Flask entrypoint (local dev: `python app.py`)
 └── wsgi.py                                    # Gunicorn entrypoint (production/Docker)
@@ -195,7 +196,7 @@ mailflow/
 confidence on category, low model confidence on priority, or a
 low-information input (missing subject / near-empty body, detected via
 `app/features.py`). These engineered signals are used only for this
-review trigger — never as classifier input (see Section 8).
+review trigger — never as classifier input.
 
 **Validation:** missing `subject`/`body` → 400 · empty input → 400 ·
 malformed JSON → 400 · wrong field types → 400 · input exceeding
@@ -284,16 +285,16 @@ sales-routing use case.
 
 **Model B — Priority Classification (LinearSVC, same TF-IDF config)**
 
-Accuracy: **61%** · Macro-F1: **0.593**
+Accuracy: **62%** · Macro-F1: **0.603**
 
 | Priority | Precision | Recall | F1   | Support |
 | -------- | --------- | ------ | ---- | ------- |
-| LOW      | 0.52      | 0.47   | 0.50 | 472     |
-| MEDIUM   | 0.61      | 0.65   | 0.63 | 946     |
-| HIGH     | 0.66      | 0.65   | 0.65 | 921     |
+| LOW      | 0.57      | 0.48   | 0.65 | 461     |
+| MEDIUM   | 0.63      | 0.64   | 0.63 | 969     |
+| HIGH     | 0.63      | 0.68   | 0.65 | 909     |
 
 _Not further tuned, deliberately._ Errors concentrate almost entirely
-between _adjacent_ priority levels (LOW↔MEDIUM, MEDIUM↔HIGH) rather than
+between _adjacent_ priority levels (LOW<->MEDIUM, MEDIUM<->HIGH) rather than
 the two extremes — the signature of an information ceiling: priority is
 partly a business judgment call (SLA, customer tier) that text alone
 can't fully recover. This is why the deployed system blends the model's
@@ -361,7 +362,7 @@ pytest tests/ -v
 ## Local Development Setup
 
 ```bash
-git clone <your-repo-url>
+git clone <https://github.com/sreesyam064/mailflow>
 cd mailflow
 python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements-dev.txt
@@ -434,10 +435,10 @@ No `GHCR`-related secret is required — workfloew authenticates with GitHub Act
 
 ## Limitations
 
-- Priority macro-F1 (0.59) reflects a genuine information ceiling — priority is partly a business judgment call, not purely a text-classification problem (Section 7).
+- Priority macro-F1 (0.60) reflects a genuine information ceiling — priority is partly a business judgment call, not purely a text-classification problem.
 - Sales category recall (0.33–0.45, varies slightly across retrains) is limited by sample size (329 rows total, ~66 in test) — small enough that which specific rows land in the test split visibly moves this metric.
 - Confidence scores are a documented softmax approximation over SVM decision margins, not calibrated probabilities.
-- Underlying dataset is synthetically generated, not organic real-world tickets (disclosed in Section 7).
+- Underlying dataset is synthetically generated, not organic real-world tickets.
 - Entity extraction is regex-based; it will miss entities in unusual formats it wasn't designed for — by design, it returns `null` rather than guessing.
 
 ## Future Improvements
