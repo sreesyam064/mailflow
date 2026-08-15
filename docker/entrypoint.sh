@@ -1,8 +1,9 @@
 #!/bin/sh
 # Starts Gunicorn (Flask API) as a background process bound to 127.0.0.1:5000 (internal only,
-# never exposed by container), then exec Streamlit in foreground on $PORT ((7860 for Hugging Face Spaces, 
-# overrides elsewhere). Streamlit is container's public/foreground process,
-# Gunicorn is started exactly once here, not by Streamlit or any user session.
+# never exposed by container), then exec Streamlit in foreground on $PORT (platform injects this — 
+# e.g. Render sets it automatically at runtime: defaults to 7860 for local `docker run`). 
+# Streamlit is container's public/foreground process, Gunicorn is started exactly once here, 
+# not by Streamlit or any user session.
 set -e
 
 gunicorn \

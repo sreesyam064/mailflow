@@ -2,9 +2,8 @@
 
 # Runs Gunicorn (Flask API, internal-only on 127.0.0.1:5000) and Streamlit
 # (public, foreground, on $PORT) as two processes inside a single container.
-# This is required for Hugging Face Spaces, which only exposes one port per
-# Space — Streamlit is that one public port; Flask is never exposed outside
-# the container.
+# This single-container design works unchanged across Render that runs one Docker 
+# container per service — Streamlit is one public port; Flask is never exposed outside container.
 FROM python:3.12-slim AS base
 
 # Prevent Python from writing .pyc files / buffering stdout — cleaner container
@@ -30,9 +29,9 @@ COPY wsgi.py .
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Hugging Face Spaces (Docker SDK) expects app to listen on port 7860 by default.
-# Render/Railway/Docker Compose can override via $PORT. Flask/Gunicorn always
-# binds to 127.0.0.1:5000 internally — it is never exposed outside the container.
+# Default port for local `docker run` without -e PORT=... . Render inject their own PORT at container runtime,
+# which overrides this — docker/entrypoint.sh already reads it via ${PORT:-7860}, so no code change needed to support Render.
+# Flask/Gunicorn always binds to 127.0.0.1:5000 internally — it is never exposed outside the container, on any platform..
 ENV PORT=7860 \
     API_URL=http://127.0.0.1:5000
 

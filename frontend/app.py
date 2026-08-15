@@ -1,17 +1,16 @@
 """
 MailFlow AI frontend
 
-Calls Flask REST API over HTTP (not direct function imports) to keep
-frontend/backend seperation clean. 
-For HuggingFace Spaces (single port), Flask API is started in a background thread
-from this same process.
+Calls Flask REST API over HTTP (never by importing Flask directly) to keep
+frontend/backend seperation clean. In single-container deployment (Docker on 
+Render pr other platforms), Gunicorn runs the Flask API on 127.0.0.1:5000 as its
+own process — started by UI-only: it never starts, owns, or manages Flask process.
 """
 
 import os
 
 import requests
 import streamlit as st
-
 
 API_BASE_URL = os.getenv("API_URL", "http://127.0.0.1:5000")
 
