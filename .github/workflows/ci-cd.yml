@@ -1,10 +1,15 @@
-name: CI/CD — Test, Build Verify, Deploy to Hugging Face
+name: CI/CD — Test, Build Verify, Deploy to Render
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
+env:
+  # GHCR requires a lowercase image path. github.repository is "Owner/Repo" and
+  # may contain uppercase letters, so it's lowered once here and reused by every job.
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
 
 jobs:
   test:
@@ -25,22 +30,38 @@ jobs:
       - name: Run pytest
         run: python -m pytest tests/ -v
 
-  docker-build-verify:
-    name: Verify Docker image builds
+  build-test-push:
+    name: Build image, smoke-test, push to GHCR
     runs-on: ubuntu-latest
     needs: test
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
-      # Build-Verification gate only — this image is NOT pushed anywhere.
-      # It existes purely to catch Dockerfile/dependency breakage before the same
-      # Dockerfile is built for real by Hugging Face Spaces in deploy job below.cancel-timeout-minutes:
-      - name: Build image (Verification only, no push)
-        run: docker build -t mailflow-ai:ci-verify .
+      - name: Compute lowercase image tags
+        id: vars
+        run: |
+          IMAGE="${IMAGE_NAME,,}"
+          echo "image=$IMAGE:${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=$IMAGE:latest" >> "$GITHUB_OUTPUT"
+
+      # Build ONCE, tagged with both :latest and the short commit SHA. This exact image is
+      # what gets smoke-tested below and, only if that passes, pushed to GHCR — so image
+      # Render eventually pulls is provably same one this pipeline verified, not a
+      # separate build Render (or GHCR) produces independently.
+      - name: Build image
+        run: |
+          docker build \
+            -t "${{ steps.vars.outputs.sha_tag }}" \
+            -t "${{ steps.vars.outputs.latest_tag }}"
+            .
 
       - name: Smoke-test the built image
         run: |
-          docker run -d --name mailflow-ci -p 7860:7860 mailflow-ai:ci-verify
+          docker run -d --name mailflow-ci -p 7860:7860 "${{ steps.vars.outputs.latest_tag }}"
+
           echo "Waiting for Flask (internal, via docker exec) to become healthy..."
           for i in $(seq 1 20); do
             if docker exec mailflow-ci python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health')" 2>/dev/null; then
@@ -64,37 +85,39 @@ jobs:
           docker logs mailflow-ci
           docker stop mailflow-ci
 
-  deploy-to-huggingface:
-    name: Deploy to Hugging Face Spaces
+      # Only reached if smoke test above succeeded. Uses workflow's own short-lived GUTHUB_TOKEN —
+      # no extra secret needed for a public GHCR package.
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Push image to GHCR
+        run: |
+          docker push "${{ steps.vars.outputs.sha_tag }}"
+          docker push "${{ steps.vars.outputs.latest_tag }}"
+
+  deploy-to-render:
+    name: Deploy to Render
     runs-on: ubuntu-latest
-    needs: [test, docker-build-verify]
+    needs: [test, build-test-push]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      # HF Spaces requires its config (sdk, app_port, etc.) as YAML frontmatter in README.md —
-      # but that frontmatter renders as ugly literal text on GitHub, which doesn't parse it.
-      # So we swap in HF-specific README ONLY for this pudh, as local commit that never pushed
-      # back to origin/main. GitHub's README.md is untouched.
-      - name: Swap in HF Spaces README (local commit only, not pushed to origin)
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          cp README_HF.md README.md
-          git add README.md
-          git commit -m "chore: use HF Spaces README (CI-only, not merged to origin)"
-
-      # Pushes this repo's main branch to HuggingFace Space's own git remote.
-      # Hugging Face then builds the SAME Dockerfile itself and auto-deploys —
-      # HF Spaces (Docker SDK) always builds from its won repo, it does not pull
-      # images from an external registry.
-      - name: Push to Hugging Face Space
+      # No checkout needed — this step only fires Render's deploy hook, which tells Render to pull
+      # ":latest" tag just pushed above (render.yaml configures service with runtime: image pointing
+      # at that tag). Triggering from CI rather than relying on Render's own registry-watch/auto-deploy
+      # makes test + build-test-push a real deployment guard.
+      - name: Trigger Render deploy hook
         env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_USERNAME: ${{ secrets.HF_USERNAME }}
-          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
-        run:
-          git remote add hf https://${HF_USERNAME}:${HF_TOKEN}@huggingface.co/spaces/${HF_USERNAME}/${HF_SPACE_NAME}
-          git push hf HEAD:main --force
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL secret is not set." >&2
+            exit 1
+          fi
+          response=$(curl -s -o /tmp/render_response.txt -w "%{http_code}" -X POST "$RENDER_DEPLOY_HOOK_URL")
+          cat /tmp/render_response.txt
+          if [ "$response" -ge 200 ] && [ "$response" -lt 300 ]; then
+            echo "Render deploy triggered successfully (HTTP $response)."
+          else
+            echo "Render deploy hook failed (HTTP $response)." >&2
+            exit 1
+          fi

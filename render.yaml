@@ -1,0 +1,31 @@
+# Render Blueprint for MailFlow AI.
+
+# Defines the service as code instead of cliking through Render's dashboard.
+# This deploys SAME single-container image used everywhere else in this project —
+# Gunicorn (Flask API, internal-only) + Streamlit (public) started by docker/entripoint.
+
+services:
+  - type: web
+    name: mailflow-ai
+    runtime: image
+    image:
+      url: ghcr.io/sreesyam064/mailflow:latest
+    plan: free
+    autoDeploy: false
+    healthCheckPath: /
+    envVars:
+      # Render injects PORT automatically at platform level — do not set it here.
+      - key: API_URL
+        value: http://127.0.0.1:5000
+      - key: CONFIDENCE_THRESHOLD
+        value: "0.55"
+      - key: MAX_EMAIL_LENGTH
+        value: "20000"
+      - key: MIN_EMAIL_LENGTH
+        value: "3"
+      - key: SENTIMENT_NEGATIVE_THRESHOLD
+        value: "-0.05"
+      - key: SENTIMENT_POSITIVE_THRESHOLD
+        value: "0.05"
+      - key: NEGATIVE_SENTIMENT_PRIORITY_BOOST_THRESHOLD
+        value: "-0.5"
